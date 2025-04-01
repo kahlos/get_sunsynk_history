@@ -1,5 +1,9 @@
-# Resources folder contains user manuals, and repos of previous attempts for the AI
+# Resources folder to feed the AI
+# Contains user manuals, and repos of other people's attempts at an API client
 /resources
 
-#
+# Dedicated Python environment for the project
+/py-env
+
+# Remove macOS DS store files
 .DS_Store
