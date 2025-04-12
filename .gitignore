@@ -7,3 +7,6 @@
 
 # Remove macOS DS store files
 .DS_Store
+
+# Output folder
+/output

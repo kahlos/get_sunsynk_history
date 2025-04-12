@@ -43,3 +43,11 @@ Lets also make some further tweaks and changes:
 * If the user inputs their credentials manually, write this out to the missing credentials.ini file so they are present on the next run of the program. Inform the user of the username of the details being used, so it is clear that this has been done
 * Update the credentials.ini file name to be a more generic config.ini to help avoid login details
 * Give a help output if the program is run with no arguments specifying everything that can be done with the program
+
+# Prompt 5
+
+This is great and the best version so far, there is just one error. Due to the help output, there's no way for the user to simply run without any arguments and output the data for todays date. Adjust the help function into a standard arguments to remedy this.
+
+The program also doesn't prevent the user running for dates in the past, it simply returns no data for those older dates. Correct the dates that a user enters, instead of allowing it to run and return no data, unless there is a --force argument on run, which will force it to run for the selected dates regardless. Document this argument in the help file.
+
+Finally, give feedback on any other changes or improvements that you would recommend to improve the programs functionality.

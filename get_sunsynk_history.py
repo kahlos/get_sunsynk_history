@@ -6,14 +6,14 @@ import csv
 import time
 from collections import defaultdict
 import os
-import sys       # Needed for sys.argv check
-import getpass   # For secure password prompt
+import sys
+import getpass
 import configparser
-import platform  # For OS-specific config path
+import platform
 
 # --- Configuration ---
-CONFIG_FILENAME = "config.ini"                  # Renamed config file
-CONFIG_DIR_NAME = "get-sunsynk-history"       # Renamed config folder
+CONFIG_FILENAME = "config.ini"
+CONFIG_DIR_NAME = "get-sunsynk-history" # Directory name updated
 
 # Choose appropriate config path based on OS
 if platform.system() == "Windows":
@@ -31,45 +31,20 @@ LOGIN_URL = f"{BASE_URL}/oauth/token"
 PLANTS_URL = f"{BASE_URL}/api/v1/plants"
 DAILY_ENERGY_URL_TEMPLATE = f"{BASE_URL}/api/v1/plant/energy/{{plant_id}}/day"
 CLIENT_ID = "csp-web"
-REQUEST_DELAY = 0.6 # Seconds to wait between API calls
+REQUEST_DELAY = 0.6 # Seconds
 
-# --- Helper Functions ---
-
-def print_usage_and_exit(parser):
-    """Prints custom usage help and exits."""
-    print("Usage: python get_sunsynk_history.py [DATE_1] [DATE_2] [-o OUTPUT_DIR]")
-    print("\nFetches historical data from the Sunsynk API (limited to the last ~90 days).")
-    print("\nArguments:")
-    print("  DATE_1       (Optional) Start date (YYYY-MM-DD). If only DATE_1 is provided,")
-    print("               fetches from yesterday back to DATE_1.")
-    print("  DATE_2       (Optional) End date (YYYY-MM-DD). Requires DATE_1.")
-    print("  -o OUTPUT_DIR (Optional) Directory to save the output CSV file")
-    print("               (default: current directory).")
-    print("\nBehavior:")
-    print("  - No dates provided: Fetches data for the CURRENT DAY.")
-    print("  - One date provided: Fetches data from YESTERDAY back to the specified DATE_1.")
-    print("  - Two dates provided: Fetches data for the inclusive range DATE_1 to DATE_2.")
-    print("\nCredentials:")
-    print("  The script reads credentials in this order:")
-    print("  1. Environment Variables: SUNSYNK_USERNAME, SUNSYNK_PASSWORD")
-    print(f"  2. Config File: {CONFIG_FILE_PATH}")
-    print("     (Create this file with a [Credentials] section containing Username and Password)")
-    print("  3. Secure Prompt: If not found above, you will be prompted.")
-    print("     (Credentials entered via prompt will be saved to the config file if possible).")
-    print("\n")
-    #parser.print_help() # Optionally print standard argparse help too
-    sys.exit(0)
-
+# --- Helper Functions (get_credentials, login, get_plants, format_value, parse_api_timestamp) ---
+# Include the latest versions of these functions from the previous response here...
+# (They are the same as the last version provided)
 def get_credentials():
     """Gets username and password from Env -> Config File -> Prompt."""
     username = os.getenv("SUNSYNK_USERNAME")
     password = os.getenv("SUNSYNK_PASSWORD")
     source = "Environment Variables"
-    save_creds = False # Flag to indicate if we should try saving prompted creds
+    save_creds = False
 
     if not (username and password):
         source = f"Config File ({CONFIG_FILE_PATH})"
-        # print(f"\nCredentials not found in environment variables, trying config file: {CONFIG_FILE_PATH}")
         config = configparser.ConfigParser()
         if os.path.exists(CONFIG_FILE_PATH):
             try:
@@ -85,7 +60,9 @@ def get_credentials():
                 print(f"  -> Error reading config file ({CONFIG_FILE_PATH}): {e}")
                 username, password = None, None
         else:
-            print(f"  -> Config file not found: {CONFIG_FILE_PATH}")
+            # Only print not found if we didn't get creds from Env
+            if not os.getenv("SUNSYNK_USERNAME"):
+                 print(f"  -> Config file not found: {CONFIG_FILE_PATH}")
             username, password = None, None
 
     if not (username and password):
@@ -95,19 +72,17 @@ def get_credentials():
             username = input("Enter Sunsynk Username (email): ")
             password = getpass.getpass("Enter Sunsynk Password: ")
             if username and password:
-                save_creds = True # Mark creds from prompt to be saved
+                save_creds = True
             else:
                 print("Error: Username and password cannot be empty.")
                 return None, None, None
-        except EOFError: # Handle case where script is run non-interactively without creds
+        except EOFError:
              print("\nError: Could not read credentials from prompt (non-interactive run?).")
              print("Please provide credentials via environment variables or config file.")
              return None, None, None
 
-
-    # --- Save prompted credentials if needed ---
     if save_creds:
-        print(f"Using credentials provided by {source}.") # Confirm source before potential save message
+        print(f"Using credentials provided by {source}.")
         try:
             os.makedirs(APP_CONFIG_DIR, exist_ok=True)
             config = configparser.ConfigParser()
@@ -127,8 +102,6 @@ def get_credentials():
 
     return username, password, source
 
-# --- Login, Get Plants, Format Value, Parse Timestamp functions ---
-# (These remain the same as the previous version - include them here)
 def login(username, password):
     """Authenticates with the API and returns the access token."""
     print(f"Attempting to log in to {LOGIN_URL}...")
@@ -143,8 +116,8 @@ def login(username, password):
         "Accept": "application/json"
     }
     try:
-        response = requests.post(LOGIN_URL, headers=headers, json=payload, timeout=30) # Increased timeout
-        response.raise_for_status() # Raise HTTP errors
+        response = requests.post(LOGIN_URL, headers=headers, json=payload, timeout=30)
+        response.raise_for_status()
         data = response.json()
 
         if data.get("success"):
@@ -153,7 +126,6 @@ def login(username, password):
                 print("Login successful.")
                 return access_token
             else:
-                # Attempt to get more specific error msg if available
                 error_msg = data.get('msg') or data.get('data', {}).get('error_description') or 'Access token not found'
                 print(f"Login failed: {error_msg}")
                 return None
@@ -165,12 +137,12 @@ def login(username, password):
     except requests.exceptions.HTTPError as e:
         error_body = e.response.text
         error_msg_detail = ""
-        try: # Try to get specific error from API response body
+        try:
             error_data = json.loads(error_body)
             error_msg_detail = error_data.get('msg') or error_data.get('error_description') or error_data.get('message') or error_body
         except json.JSONDecodeError:
             error_msg_detail = error_body
-        print(f"Login HTTP error: {e.response.status_code} - {error_msg_detail[:500]}") # Limit length
+        print(f"Login HTTP error: {e.response.status_code} - {error_msg_detail[:500]}")
         return None
     except requests.exceptions.RequestException as e:
         print(f"Login network/request error: {e}")
@@ -182,7 +154,6 @@ def login(username, password):
 
 def get_plants(access_token):
     """Fetches plant information."""
-    # (Same as before)
     print(f"Fetching plant information from {PLANTS_URL}...")
     headers = {
         "Authorization": f"Bearer {access_token}",
@@ -218,64 +189,39 @@ def get_plants(access_token):
 
 def format_value(value_str):
     """Formats numeric string, removing '.0' for integers."""
-    # (Same as before)
-    if value_str is None:
-        return ""
+    if value_str is None: return ""
     try:
         num = float(value_str)
-        if num.is_integer():
-            return str(int(num))
-        else:
-            # Keep precision as returned by API if not integer
-            return str(num) # Use str(num) instead of value_str to handle float conversion result
-    except (ValueError, TypeError):
-        return str(value_str) # Ensure return is string
+        return str(int(num)) if num.is_integer() else str(num)
+    except (ValueError, TypeError): return str(value_str)
 
 def parse_api_timestamp(date_part: date, time_part_str: str) -> datetime | None:
     """Combines date and time string parts into a datetime object."""
-    # (Same as before)
     if not time_part_str: return None
-    time_formats = ["%H:%M:%S", "%H:%M"] # Try with seconds first
+    time_formats = ["%H:%M:%S", "%H:%M"]
     parsed_time = None
     for fmt in time_formats:
         try:
-            parsed_time = datetime.strptime(time_part_str, fmt).time()
-            break # Stop if parsed successfully
-        except ValueError:
-            continue # Try next format
-
+            parsed_time = datetime.strptime(time_part_str, fmt).time(); break
+        except ValueError: continue
     if parsed_time is None:
-        print(f"  - Warning: Could not parse time string '{time_part_str}' with known formats.")
+        # print(f"  - Warning: Could not parse time string '{time_part_str}'") # Can be noisy
         return None
-
     return datetime.combine(date_part, parsed_time)
-# -------------------------------------------------------------------
 
 def get_daily_energy_data_restructured(access_token, plant_id, target_date):
-    """
-    Fetches energy data and restructures it.
-    Returns a dict keyed by datetime object, value is {label[unit]: formatted_value}.
-    """
-    # (Same logic as previous version, uses the updated parse_api_timestamp)
+    """Fetches and restructures energy data for a specific day."""
+    # (Same fetch and restructure logic as the previous version)
     date_str = target_date.strftime("%Y-%m-%d")
     url = DAILY_ENERGY_URL_TEMPLATE.format(plant_id=plant_id)
     print(f"Fetching data: Plant {plant_id}, Date {date_str}...")
-    # (Rest of the function is the same as previous 'get_daily_energy_data_restructured')
-
-    headers = {
-        "Authorization": f"Bearer {access_token}",
-        "Accept": "application/json"
-    }
-    params = {
-        "date": date_str,
-        "id": plant_id,
-        "lan": "en"
-    }
-    data_by_datetime = defaultdict(dict) # Store {datetime_object: {label_unit: value}}
+    headers = {"Authorization": f"Bearer {access_token}", "Accept": "application/json"}
+    params = {"date": date_str, "id": plant_id, "lan": "en"}
+    data_by_datetime = defaultdict(dict)
 
     try:
         time.sleep(REQUEST_DELAY)
-        response = requests.get(url, headers=headers, params=params, timeout=60) # Even longer timeout
+        response = requests.get(url, headers=headers, params=params, timeout=60)
         response.raise_for_status()
         data = response.json()
 
@@ -288,86 +234,81 @@ def get_daily_energy_data_restructured(access_token, plant_id, target_date):
             all_labels_units_day = set()
             records_found_for_day = False
             for info_item in infos:
-                label = info_item.get('label')
-                unit = info_item.get('unit', '')
+                label = info_item.get('label'); unit = info_item.get('unit', '')
                 records = info_item.get('records', [])
                 if not label: continue
-
                 header_name = f"{label}[{unit}]" if unit else label
                 all_labels_units_day.add(header_name)
+                if not records: continue
+                records_found_for_day = True
 
-                if not records: continue # No records for this label, skip to next label
-
-                records_found_for_day = True # Mark that we found some records today
                 for record in records:
-                    record_time_str = record.get('time')
-                    record_value_str = record.get('value')
-
-                    # --- Key change: Use combined datetime ---
+                    record_time_str = record.get('time'); record_value_str = record.get('value')
                     datetime_key = parse_api_timestamp(target_date, record_time_str)
-                    # ---------------------------------------
-
                     if datetime_key and record_value_str is not None:
-                        formatted_val = format_value(record_value_str)
-                        data_by_datetime[datetime_key][header_name] = formatted_val
-                    # else: print(f"  - Skipping record, invalid time/value for '{label}': {record}")
+                        data_by_datetime[datetime_key][header_name] = format_value(record_value_str)
 
             if data_by_datetime:
-                 # Sort the labels for consistent printing
                 sorted_labels = sorted(list(all_labels_units_day))
-                print(f"  + OK: Fetched {len(data_by_datetime)} timestamp entries for {date_str} with labels: {', '.join(sorted_labels)}")
-                return dict(data_by_datetime) # Convert defaultdict to dict
+                print(f"  + OK: Fetched {len(data_by_datetime)} timestamps for {date_str} ({', '.join(sorted_labels[:3])}{'...' if len(sorted_labels)>3 else ''})")
+                return dict(data_by_datetime)
             elif records_found_for_day:
-                 print(f"  - Warning: Found records for {date_str}, but failed to parse valid timestamps or values.")
+                 print(f"  - Warning: Found records structure for {date_str}, but no valid timestamps/values parsed.")
                  return None
             else:
-                 print(f"  - OK: No valid measurement records found within the 'infos' structure for {date_str}.")
-                 return None # No valid data points parsed
+                 print(f"  - OK: No measurement records found within 'infos' for {date_str}.")
+                 return None
 
         else:
             msg = data.get('msg', 'No data structure or unknown error')
             print(f"  - API Fail/No Data for {date_str}: {msg}")
-            # If API says success=false but status was 200, log it
             if not data.get("success", True) and response.status_code == 200:
                  print(f"     (API success=false, HTTP Status=200. Raw response: {data})")
             return None
 
     except requests.exceptions.HTTPError as e:
-        print(f"  - HTTP error {e.response.status_code} fetching for {date_str}: {e.response.text[:200]}") # Truncate long errors
-        if e.response.status_code == 401:
-             print("  -> Authentication error. Stopping.")
-             raise ConnectionAbortedError("Token expired or invalid")
-        elif e.response.status_code == 429:
-             print("  -> Rate limited! Increase REQUEST_DELAY (currently {REQUEST_DELAY}s).")
-        # Handle other specific errors if needed
-        return None # Allow loop to continue for other days unless it's auth error
+        print(f"  - HTTP error {e.response.status_code} fetching for {date_str}: {e.response.text[:200]}")
+        if e.response.status_code == 401: raise ConnectionAbortedError("Token expired or invalid")
+        elif e.response.status_code == 429: print(f"  -> Rate limited! Consider increasing REQUEST_DELAY (currently {REQUEST_DELAY}s).")
+        return None
     except requests.exceptions.RequestException as e:
         print(f"  - Network/request error fetching for {date_str}: {e}")
         return None
     except json.JSONDecodeError:
-        print(f"  - Error decoding energy data JSON for {date_str}.")
-        print("  - Raw response snippet:", response.text[:200] + ('...' if len(response.text) > 200 else ''))
+        print(f"  - Error decoding JSON for {date_str}. Raw response snippet:", response.text[:200] + ('...' if len(response.text) > 200 else ''))
         return None
+# -------------------------------------------------------------------
+
 
 # --- Main Execution ---
 
 def main():
+    # --- Argument Parsing ---
     parser = argparse.ArgumentParser(
-        description="Extract historical data from Sunsynk API (limited to last 90 days by API).",
-        epilog="Handles dates, credentials, and formats output to a wide CSV."
-    )
-    parser.add_argument("dates", nargs='*', help="Date(s) in YYYY-MM-DD format (optional).")
-    parser.add_argument("-o", "--outputdir", default=".",
-                        help="Output directory (default: current directory)")
-    # If run with no arguments (only script name), print custom help
-    if len(sys.argv) == 1:
-        print_usage_and_exit(parser)
+        description="Extract historical data from Sunsynk API.",
+        epilog=f"""Fetches data (limited to the last ~90 days by API).
+Modes:
+  No dates   : Fetches CURRENT DAY's data.
+  One date   : Fetches YESTERDAY back to the specified date.
+  Two dates  : Fetches the specified inclusive range.
 
+Credentials Priority: Env Vars -> Config File -> Prompt.
+Config File Path: {CONFIG_FILE_PATH}
+""",
+        formatter_class=argparse.RawTextHelpFormatter # Keep newlines in epilog
+    )
+    parser.add_argument("dates", nargs='*', # 0, 1, or 2 dates
+                        help="Date(s) (YYYY-MM-DD). See usage modes below.")
+    parser.add_argument("-o", "--outputdir", default=".",
+                        help="Output directory for the CSV file (default: current directory).")
+    parser.add_argument("--force", action="store_true",
+                        help="Force fetching data even if the start date is older than 90 days (API may return no data).")
     args = parser.parse_args()
 
+    # --- Get Credentials ---
     username, password, cred_source = get_credentials()
     if not (username and password):
-        print("Exiting: Failed to obtain credentials.")
+        print("Exiting: Could not obtain credentials.")
         return
 
     # --- Determine Date Range ---
@@ -378,33 +319,26 @@ def main():
 
     try:
         if len(args.dates) == 0:
-            # Today's data
             start_dt = today
             end_dt = today
             filename_mode = "today"
-            print(f"\nFetching data for today: {start_dt.strftime('%Y-%m-%d')}")
+            print(f"\nMode: Fetching data for today ({start_dt.strftime('%Y-%m-%d')})")
         elif len(args.dates) == 1:
-            # Yesterday back to Date 1
             start_dt = datetime.strptime(args.dates[0], "%Y-%m-%d").date()
             end_dt = today - timedelta(days=1)
             filename_mode = "range"
-            print(f"\nFetching data from {start_dt.strftime('%Y-%m-%d')} to {end_dt.strftime('%Y-%m-%d')} (yesterday)")
+            print(f"\nMode: Fetching data from {start_dt.strftime('%Y-%m-%d')} to yesterday ({end_dt.strftime('%Y-%m-%d')})")
         elif len(args.dates) == 2:
-            # Specific range
             start_dt = datetime.strptime(args.dates[0], "%Y-%m-%d").date()
             end_dt = datetime.strptime(args.dates[1], "%Y-%m-%d").date()
             filename_mode = "range"
-            print(f"\nFetching data from {start_dt.strftime('%Y-%m-%d')} to {end_dt.strftime('%Y-%m-%d')}")
-        else:
-            print("Error: Too many date arguments.")
-            print_usage_and_exit(parser) # Show help if args are wrong
+            print(f"\nMode: Fetching data for specified range ({start_dt.strftime('%Y-%m-%d')} to {end_dt.strftime('%Y-%m-%d')})")
+        # Argparse handles > 2 dates by default error
 
-        # Ensure start <= end
         if start_dt > end_dt:
-            print(f"Warning: Start date ({start_dt}) is after end date ({end_dt}). Swapping them for fetching.")
+            print(f"Warning: Start date ({start_dt}) is after end date ({end_dt}). Swapping them.")
             start_dt, end_dt = end_dt, start_dt
 
-        # Store effective range for filename
         effective_start_str = start_dt.strftime("%Y-%m-%d")
         effective_end_str = end_dt.strftime("%Y-%m-%d")
 
@@ -412,11 +346,17 @@ def main():
         print("Error: Invalid date format in arguments. Please use YYYY-MM-DD.")
         return
 
-    # --- 90-Day Warning ---
+    # --- 90-Day Limit Check ---
     ninety_days_ago = today - timedelta(days=90)
     if start_dt < ninety_days_ago:
-        print(f"\nWarning: Requested start date {start_dt.strftime('%Y-%m-%d')} is older than 90 days ago ({ninety_days_ago.strftime('%Y-%m-%d')}).")
-        print("         API data may not be available this far back.")
+        if not args.force:
+            print(f"\nError: Start date {start_dt.strftime('%Y-%m-%d')} is older than 90 days ({ninety_days_ago.strftime('%Y-%m-%d')}).")
+            print("       The API likely has no data this old.")
+            print("       Use the --force flag to attempt fetching anyway.")
+            sys.exit(1) # Exit if too old and not forced
+        else:
+            print(f"\nWarning: Start date {start_dt.strftime('%Y-%m-%d')} is older than 90 days.")
+            print("         Proceeding due to --force flag, but the API may return no data for older dates.")
 
     # --- API Interaction ---
     access_token = login(username, password)
@@ -426,7 +366,7 @@ def main():
     if not plants: print("Exiting."); return
 
     # --- Plant Selection ---
-    # (Same selection logic as previous version)
+    # (Same logic as before)
     target_plant_id = None
     target_plant_name = None
     if len(plants) == 1:
@@ -435,25 +375,18 @@ def main():
          print(f"\nFound 1 plant: Using ID={target_plant_id}, Name='{target_plant_name}'")
     else:
          print("\nMultiple plants found:")
-         for i, plant in enumerate(plants):
-              print(f"  {i+1}: ID={plant['id']}, Name='{plant['name']}'")
+         for i, plant in enumerate(plants): print(f"  {i+1}: ID={plant['id']}, Name='{plant['name']}'")
          while target_plant_id is None:
               try:
                    choice = input(f"Enter the number of the plant to export (1-{len(plants)}): ")
                    plant_index = int(choice) - 1
                    if 0 <= plant_index < len(plants):
-                        target_plant_id = plants[plant_index]['id']
-                        target_plant_name = plants[plant_index]['name']
+                        target_plant_id = plants[plant_index]['id']; target_plant_name = plants[plant_index]['name']
                         print(f"Selected Plant: ID={target_plant_id}, Name='{target_plant_name}'")
-                   else:
-                        print("Invalid choice.")
-              except ValueError:
-                   print("Invalid input. Please enter a number.")
-              except EOFError:
-                    print("\nInput aborted. Exiting.")
-                    return
-
-    if not target_plant_id: return # Exit if selection failed
+                   else: print("Invalid choice.")
+              except ValueError: print("Invalid input.")
+              except EOFError: print("\nInput aborted."); return
+    if not target_plant_id: return
 
     # --- Fetch Data ---
     all_data_by_datetime = {} # Use datetime objects as keys
@@ -467,23 +400,25 @@ def main():
             daily_data_dict = get_daily_energy_data_restructured(access_token, target_plant_id, current_loop_date)
             if daily_data_dict:
                 all_data_by_datetime.update(daily_data_dict)
-                # Dynamically collect all headers seen
-                for timestamp_data in daily_data_dict.values():
-                    all_headers.update(timestamp_data.keys())
-        except ConnectionAbortedError: # Raised on 401
+                for ts_data in daily_data_dict.values(): all_headers.update(ts_data.keys())
+        except ConnectionAbortedError:
             print("Stopping data fetch loop due to authentication failure.")
-            fetch_interrupted = True
-            all_data_by_datetime = {} # Clear potentially bad data
-            break # Exit date loop
+            fetch_interrupted = True; all_data_by_datetime = {}; break
+        except KeyboardInterrupt:
+            print("\nFetch interrupted by user.")
+            fetch_interrupted = True; break # Allow partial write
 
         current_loop_date += timedelta(days=1)
 
     # --- Write to CSV ---
-    if fetch_interrupted or not all_data_by_datetime:
-        print("\nNo data collected or fetch aborted. CSV file will not be created.")
+    if fetch_interrupted and not all_data_by_datetime:
+        print("\nFetch aborted, no data collected. CSV file not created.")
+        return
+    if not all_data_by_datetime:
+        print("\nNo data was successfully collected. CSV file will not be created.")
         return
     if not all_headers:
-         print("\nNo measurement labels found in the collected data. Cannot create CSV.")
+         print("\nNo measurement labels/headers found. Cannot create CSV.")
          return
 
     # Prepare headers and filename
@@ -491,44 +426,37 @@ def main():
     final_fieldnames = ["DateTime"] + sorted_unique_headers
 
     if filename_mode == "today":
-         # Handle case where today's data was fetched
-         output_filename = f"sunsynk_plant_{target_plant_id}_{effective_start_str}_today.csv"
-    elif effective_start_str == effective_end_str: # Single specific day requested or defaulted to
-         output_filename = f"sunsynk_plant_{target_plant_id}_{effective_start_str}.csv"
+        # Use the actual date fetched, which is 'today'
+        output_filename = f"sunsynk_plant_{target_plant_id}_{today.strftime('%Y-%m-%d')}_today.csv"
+    elif effective_start_str == effective_end_str:
+        output_filename = f"sunsynk_plant_{target_plant_id}_{effective_start_str}.csv"
     else:
          output_filename = f"sunsynk_plant_{target_plant_id}_{effective_start_str}_to_{effective_end_str}.csv"
 
     output_path = os.path.join(args.outputdir, output_filename)
-    print(f"\nData fetch complete. Writing {len(all_data_by_datetime)} timestamp records to {output_path}...")
-    print(f"   (Note: Gaps in timestamps may exist if the API didn't provide data for every 5-min interval).")
+    record_count = len(all_data_by_datetime)
+    status_msg = " (fetch interrupted)" if fetch_interrupted else ""
+    print(f"\nData fetch loop finished{status_msg}. Writing {record_count} timestamp records to {output_path}...")
+    if record_count > 0:
+        print(f"   (Note: Gaps in timestamps likely mean the API didn't report data for every interval).")
 
-    # Create output dir if needed
     try:
         os.makedirs(args.outputdir, exist_ok=True)
     except OSError as e:
-        print(f"Error creating output directory '{args.outputdir}': {e}")
-        return
+        print(f"Error creating output directory '{args.outputdir}': {e}"); return
 
     try:
-        # Sort final data by datetime keys
-        sorted_datetimes = sorted(all_data_by_datetime.keys())
-
+        sorted_datetimes = sorted(all_data_by_datetime.keys()) # Sort by datetime
         with open(output_path, 'w', newline='', encoding='utf-8') as csvfile:
             writer = csv.DictWriter(csvfile, fieldnames=final_fieldnames)
             writer.writeheader()
-
             for dt_key in sorted_datetimes:
-                timestamp_data = all_data_by_datetime[dt_key]
                 row_to_write = {"DateTime": dt_key.strftime("%Y-%m-%d %H:%M:%S")}
-                row_to_write.update(timestamp_data)
+                row_to_write.update(all_data_by_datetime[dt_key])
                 writer.writerow(row_to_write)
-
         print(f"Data successfully written to {output_path}")
-
-    except IOError as e:
-        print(f"Error writing CSV file '{output_path}': {e}")
-    except KeyError as e:
-         print(f"CSV writing error: Missing key {e}.")
+    except IOError as e: print(f"Error writing CSV file '{output_path}': {e}")
+    except KeyError as e: print(f"CSV writing error: Missing key {e}.")
 
 
 if __name__ == "__main__":
